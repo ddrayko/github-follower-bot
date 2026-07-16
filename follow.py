@@ -29,11 +29,13 @@ def github_request(method, url, data=None):
     try:
         with urllib.request.urlopen(req) as resp:
             body = resp.read().decode()
-            return json.loads(body) if body else None, resp.headers
+            data = json.loads(body) if body else None
+            return data, resp.status, resp.headers
     except urllib.error.HTTPError as e:
         body = e.read().decode()
-        print(f"  HTTP {e.code} on {url}: {body[:200]}")
-        return None, e.headers
+        if e.code != 404:
+            print(f"  HTTP {e.code} on {url}: {body[:200]}")
+        return None, e.code, e.headers
 
 
 def paginate(url_template, per_page=100):
@@ -41,7 +43,7 @@ def paginate(url_template, per_page=100):
     page = 1
     while True:
         url = url_template.format(per_page=per_page, page=page)
-        data, headers = github_request("GET", url)
+        data, status, headers = github_request("GET", url)
         if data is None:
             break
         if not data:
@@ -73,18 +75,14 @@ def get_following(user):
 
 def already_following(user):
     url = f"https://api.github.com/user/following/{user}"
-    data, headers = github_request("GET", url)
-    if headers:
-        return headers.get("status", "").startswith("204")
-    return False
+    data, status, headers = github_request("GET", url)
+    return status == 204
 
 
 def follow_user(username):
     url = f"https://api.github.com/user/following/{username}"
-    data, headers = github_request("PUT", url)
-    if headers:
-        return headers.get("status", "").startswith("204")
-    return False
+    data, status, headers = github_request("PUT", url)
+    return status == 204
 
 
 def load_followed():
