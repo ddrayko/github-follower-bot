@@ -13,8 +13,11 @@ if not GITHUB_TOKEN:
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "")
 FOLLOW_FILE = "follow.txt"
 TARGET_USER = "torvalds"
-MAX_FOLLOW = 600
 PER_PAGE = 100
+
+DAILY_FOLLOW_LIMIT = 50
+DELAY_BETWEEN_FOLLOWS = 60
+DELAY_BETWEEN_REQUESTS = 2
 
 def log(msg):
     print(msg, flush=True)
@@ -41,6 +44,11 @@ def github_request(method, url, data=None, quiet=False):
         body = e.read().decode()
         if not quiet:
             log(f"  RES {e.code} {body[:300]}")
+        if e.code == 403:
+            retry_after = e.headers.get("Retry-After")
+            if retry_after:
+                log(f"  RATE LIMITED, sleeping {retry_after}s")
+                time.sleep(int(retry_after))
         return None, e.code, e.headers
 
 def already_following(user):
@@ -56,11 +64,11 @@ def follow_user(username):
 def load_followed():
     if not os.path.exists(FOLLOW_FILE):
         log(f"{FOLLOW_FILE} not found, starting fresh")
-        return set()
+        return set(), 0
     with open(FOLLOW_FILE) as f:
         lines = {line.strip() for line in f if line.strip()}
     log(f"Loaded {len(lines)} users from {FOLLOW_FILE}")
-    return lines
+    return lines, 0
 
 def save_followed(followed):
     with open(FOLLOW_FILE, "w") as f:
@@ -70,17 +78,19 @@ def save_followed(followed):
 
 def main():
     log("=== START ===")
-    log(f"BOT_USERNAME={BOT_USERNAME}, TARGET={TARGET_USER}, MAX={MAX_FOLLOW}")
+    log(f"BOT_USERNAME={BOT_USERNAME}, TARGET={TARGET_USER}")
+    log(f"Limits: {DAILY_FOLLOW_LIMIT} follows/day, {DELAY_BETWEEN_FOLLOWS}s between follows")
 
-    tracked = load_followed()
+    tracked, _ = load_followed()
 
     skipped_file = 0
     skipped_already = 0
     followed_count = 0
     total_processed = 0
+    rate_limited = False
 
     page = 1
-    while total_processed < MAX_FOLLOW:
+    while not rate_limited:
         url = f"https://api.github.com/users/{TARGET_USER}/followers?per_page={PER_PAGE}&page={page}"
         log(f"Fetching followers page {page}...")
         data, status, headers = github_request("GET", url)
@@ -98,11 +108,7 @@ def main():
             login = entry["login"]
             total_processed += 1
 
-            if total_processed > MAX_FOLLOW:
-                log(f"Reached {MAX_FOLLOW} limit, stopping")
-                break
-
-            log(f"[{total_processed}/{MAX_FOLLOW}] {login}")
+            log(f"[{total_processed}] {login}")
 
             if login in tracked:
                 log(f"  -> SKIP (in follow.txt)")
@@ -115,16 +121,26 @@ def main():
                 tracked.add(login)
                 continue
 
+            if followed_count >= DAILY_FOLLOW_LIMIT:
+                log(f"  -> DAILY LIMIT REACHED ({DAILY_FOLLOW_LIMIT}), stopping")
+                rate_limited = True
+                break
+
+            log(f"  -> Following {login}...")
             ok = follow_user(login)
             if ok:
-                log(f"  -> FOLLOWED")
+                log(f"  -> OK")
                 followed_count += 1
+                tracked.add(login)
+                save_followed(tracked)
             else:
                 log(f"  -> FAILED")
 
-            tracked.add(login)
-            save_followed(tracked)
-            time.sleep(0.5)
+            log(f"  Waiting {DELAY_BETWEEN_FOLLOWS}s...")
+            time.sleep(DELAY_BETWEEN_FOLLOWS)
+
+        if rate_limited:
+            break
 
         remaining = headers.get("X-RateLimit-Remaining", "0")
         log(f"Rate limit remaining: {remaining}")
@@ -135,6 +151,7 @@ def main():
             time.sleep(sleep)
 
         page += 1
+        time.sleep(DELAY_BETWEEN_REQUESTS)
 
     save_followed(tracked)
     log(f"\n=== DONE ===")
