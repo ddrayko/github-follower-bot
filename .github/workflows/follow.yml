@@ -1,0 +1,34 @@
+name: Follow Torvalds Followers
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  follow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Config git
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run follow bot
+        env:
+          GITHUB_TOKEN: ${{ secrets.FOLLOW_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: python follow.py
+
+      - name: Commit follow.txt
+        run: |
+          git add follow.txt
+          git diff --staged --quiet || git commit -m "update follow.txt"
+          git push
