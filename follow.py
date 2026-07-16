@@ -11,7 +11,7 @@ if not GITHUB_TOKEN:
     print("❌ GITHUB_TOKEN not set")
     sys.exit(1)
 
-USERNAME = os.environ.get("GITHUB_ACTOR", "")
+USERNAME = os.environ.get("BOT_USERNAME", "")
 FOLLOW_FILE = "follow.txt"
 TARGET_USER = "torvalds"
 MAX_FOLLOW = 600
