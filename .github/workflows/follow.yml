@@ -23,7 +23,7 @@ jobs:
 
       - name: Run follow bot
         env:
-          GITHUB_TOKEN: ${{ secrets.FOLLOW_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_FOLLOW }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: python follow.py
 
