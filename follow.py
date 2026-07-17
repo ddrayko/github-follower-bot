@@ -11,7 +11,6 @@ if not GITHUB_TOKEN:
     sys.exit(1)
 
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "")
-FOLLOW_FILE = "follow.txt"
 TARGET_USER = "torvalds"
 PER_PAGE = 100
 
@@ -61,29 +60,11 @@ def follow_user(username):
     data, status, headers = github_request("PUT", url)
     return status == 204
 
-def load_followed():
-    if not os.path.exists(FOLLOW_FILE):
-        log(f"{FOLLOW_FILE} not found, starting fresh")
-        return set(), 0
-    with open(FOLLOW_FILE) as f:
-        lines = {line.strip() for line in f if line.strip()}
-    log(f"Loaded {len(lines)} users from {FOLLOW_FILE}")
-    return lines, 0
-
-def save_followed(followed):
-    with open(FOLLOW_FILE, "w") as f:
-        for name in sorted(followed):
-            f.write(f"{name}\n")
-    log(f"Saved {len(followed)} users to {FOLLOW_FILE}")
-
 def main():
     log("=== START ===")
     log(f"BOT_USERNAME={BOT_USERNAME}, TARGET={TARGET_USER}")
     log(f"Limits: {DAILY_FOLLOW_LIMIT} follows/day, {DELAY_BETWEEN_FOLLOWS}s between follows")
 
-    tracked, _ = load_followed()
-
-    skipped_file = 0
     skipped_already = 0
     followed_count = 0
     total_processed = 0
@@ -110,15 +91,9 @@ def main():
 
             log(f"[{total_processed}] {login}")
 
-            if login in tracked:
-                log(f"  -> SKIP (in follow.txt)")
-                skipped_file += 1
-                continue
-
             if already_following(login):
                 log(f"  -> SKIP (already following)")
                 skipped_already += 1
-                tracked.add(login)
                 continue
 
             if followed_count >= DAILY_FOLLOW_LIMIT:
@@ -131,8 +106,6 @@ def main():
             if ok:
                 log(f"  -> OK")
                 followed_count += 1
-                tracked.add(login)
-                save_followed(tracked)
             else:
                 log(f"  -> FAILED")
 
@@ -153,12 +126,9 @@ def main():
         page += 1
         time.sleep(DELAY_BETWEEN_REQUESTS)
 
-    save_followed(tracked)
     log(f"\n=== DONE ===")
     log(f"Followed: {followed_count}")
-    log(f"Skipped (in file): {skipped_file}")
-    log(f"Skipped (already): {skipped_already}")
-    log(f"Total tracked: {len(tracked)}")
+    log(f"Skipped (already following): {skipped_already}")
 
 if __name__ == "__main__":
     main()
