@@ -28,9 +28,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_FOLLOW }}
           BOT_USERNAME: ${{ github.actor }}
         run: python -u follow.py
-
-      - name: Commit follow.txt
-        run: |
-          git add follow.txt
-          git diff --staged --quiet || git commit -m "update follow.txt"
-          git push
